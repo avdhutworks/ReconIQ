@@ -8,7 +8,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import delete
+from sqlalchemy import delete, text
+from sqlalchemy.exc import OperationalError
 
 from app.models.source_system import SourceSystem
 from app.models.ingestion_batch import IngestionBatch
@@ -34,6 +35,56 @@ if database_name != "reconiq_test":
         "Tests must use the dedicated 'reconiq_test' database. "
         f"Current database: {database_name}"
     )
+
+
+def pytest_sessionstart(session):
+    engine = create_engine(
+        TEST_DATABASE_URL,
+        pool_pre_ping=True,
+    )
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+    except OperationalError:
+        pytest.exit(
+            "Test database unavailable.\n"
+            "Please start Docker using: docker compose up -d",
+            returncode=4,
+        )
+
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def test_engine():
+    engine = create_engine(
+        TEST_DATABASE_URL,
+        pool_pre_ping=True,
+    )
+
+    # Check database connectivity before running tests.
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+    except OperationalError:
+        engine.dispose()
+
+        pytest.exit(
+            "Test database unavailable.\n"
+            "Please start Docker using: docker compose up -d",
+            returncode=4,
+        )
+
+    # Create tables only after database connectivity succeeds.
+    Base.metadata.create_all(bind=engine)
+
+    yield engine
+
+    engine.dispose()
 
 
 @pytest.fixture(scope="session")
