@@ -9,7 +9,11 @@ from app.core.database import Base
 
 # Import models so their tables are registered
 # in Base.metadata.
-from app.models import SourceSystem
+from app.models import (
+    SourceSystem,
+    IngestionBatch,
+    RawTransaction,
+)
 
 
 config = context.config
